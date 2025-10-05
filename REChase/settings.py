@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG')
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # ALLOWED_HOSTS = ['.vercel.app', '*']
 ALLOWED_HOSTS = ['arhn.in', 'rechase.arhn.in', 'localhost', '127.0.0.1', '*']
@@ -96,11 +96,23 @@ WSGI_APPLICATION = 'REChase.wsgi.application'
 
 import dj_database_url
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL')
-    )
-}
+# Database configuration: use Postgres via DATABASE_URL in production; fallback to SQLite in development
+DATABASE_URL = config('DATABASE_URL', default=None)
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=not DEBUG
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # DATABASES = {
@@ -203,3 +215,10 @@ START_TIME = datetime.strptime(config('START_TIME'), "(%Y, %m, %d, %H, %M, %S, %
 END_TIME = datetime.strptime(config('END_TIME'), "(%Y, %m, %d, %H, %M, %S, %f)")
 
 SECURE_SSL_REDIRECT = False
+
+# Trust Render's proxy and configure CSRF trusted origins
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+_render_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+_render_external_url = os.environ.get('RENDER_EXTERNAL_URL')
+_trusted_origin = _render_external_url or (f"https://{_render_hostname}" if _render_hostname else None)
+CSRF_TRUSTED_ORIGINS = [_trusted_origin] if _trusted_origin else []
